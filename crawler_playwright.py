@@ -60,14 +60,14 @@ def extract_email_from_scripts(soup):
             return found
     return None
 
-async def crawl_website(domain, page):
+def crawl_website(domain, page):
     visited.clear()
     priority_links = []
     other_links = []
 
     try:
         print(f"🔍 [1] Strona główna: {domain}")
-        await page.goto(domain, timeout=30000, wait_until="networkidle")
+        page.goto(domain, timeout=10000, wait_until="networkidle")
         html = page.content()
         soup = BeautifulSoup(html, "html.parser")
         email = extract_first_email(soup.get_text()) or extract_mailto_email(soup) or extract_email_from_scripts(soup)
@@ -103,21 +103,6 @@ async def crawl_website(domain, page):
         except Exception as e:
             print(f"⚠️ Błąd przy {url}: {e}")
             continue
-
-    for url in other_links[:10]:
-        try:
-            print(f"🌐 [3] Inna podstrona: {url}")
-            page.goto(url, timeout=10000)
-            html = page.content()
-            soup = BeautifulSoup(html, "html.parser")
-            email = extract_first_email(soup.get_text()) or extract_mailto_email(soup) or extract_email_from_scripts(soup)
-            if email:
-                print(f"✅ Mail na zwykłej podstronie: {email}")
-                return email
-        except Exception as e:
-            print(f"⚠️ Błąd przy {url}: {e}")
-            continue
-
     print("❌ Brak maila w całej domenie.")
     return None
 
@@ -125,14 +110,16 @@ output_path = os.path.join(os.path.expanduser("~"), "Desktop", "maile.csv")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Domena", "Email"])
 
         for domain in domains:
+            context = browser.new_context(ignore_https_errors=True)
+            page = context.new_page()
             email = crawl_website(domain, page)
             writer.writerow([domain, email if email else "Brak maila"])
+            context.close()
 
     browser.close()
 
